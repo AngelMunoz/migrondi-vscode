@@ -1,0 +1,12 @@
+source https://api.nuget.org/v3/index.json
+
+nuget FSharp.Core
+
+nuget Fable.Core ~> 3.1.5
+nuget Fable.Promise ~> 2.1.0
+nuget Fable.Node ~> 1.0.2
+nuget Fable.Browser.Dom ~> 2.0.1
+
+
+github ionide/ionide-vscode-helpers src/Fable.Import.VSCode.fs
+github ionide/ionide-vscode-helpers src/Helpers.fs

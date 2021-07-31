@@ -1,0 +1,46 @@
+{
+	"name": "fsharp-fable-sample",
+	"displayName": "fsharp-fable-sample",
+	"description": "",
+	"version": "0.0.1",
+	"engines": {
+		"vscode": "^1.58.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"activationEvents": [
+		"onCommand:fsharp-fable-sample.helloWorld"
+	],
+	"main": "./dist/extension.js",
+	"contributes": {
+		"commands": [
+			{
+				"command": "fsharp-fable-sample.helloWorld",
+				"title": "Hello World"
+			}
+		]
+	},
+	"scripts": {
+		"postinstall": "dotnet tool restore",
+		"vscode:prepublish": "npm run package",
+		"compile": "dotnet fable src --run webpack",
+		"watch": "dotnet fable watch src --run webpack --watch",
+		"package": "webpack --mode production --devtool hidden-source-map"
+	},
+	"devDependencies": {
+		"@types/vscode": "^1.58.0",
+		"@types/glob": "^7.1.3",
+		"@types/mocha": "^8.2.2",
+		"@types/node": "14.x",
+		"eslint": "^7.27.0",
+		"@typescript-eslint/eslint-plugin": "^4.26.0",
+		"@typescript-eslint/parser": "^4.26.0",
+		"glob": "^7.1.7",
+		"mocha": "^8.4.0",
+		"typescript": "^4.3.2",
+		"ts-loader": "^9.2.2",
+		"webpack": "^5.38.1",
+		"webpack-cli": "^4.7.0"
+	}
+}
