@@ -1,6 +1,6 @@
-# fsharp-fable-sample README
+# migrondi-vscode README
 
-This is the README for your extension "fsharp-fable-sample". After writing up a brief description, we recommend including the following sections.
+This is the README for your extension "migrondi-vscode". After writing up a brief description, we recommend including the following sections.
 
 ## Features
 

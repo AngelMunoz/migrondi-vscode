@@ -16,7 +16,7 @@ let activate (context: ExtensionContext) : unit =
 
     let disposable =
         Fable.Import.vscode.commands.registerCommand (
-            "fsharp-fable-sample.helloWorld",
+            "migrondi-vscode.helloWorld",
             (fun _ -> showMessage () :> obj)
         )
 

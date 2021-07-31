@@ -1,6 +1,6 @@
 {
-	"name": "fsharp-fable-sample",
-	"displayName": "fsharp-fable-sample",
+	"name": "migrondi-vscode",
+	"displayName": "migrondi-vscode",
 	"description": "",
 	"version": "0.0.1",
 	"engines": {
@@ -10,13 +10,13 @@
 		"Other"
 	],
 	"activationEvents": [
-		"onCommand:fsharp-fable-sample.helloWorld"
+		"onCommand:migrondi-vscode.helloWorld"
 	],
 	"main": "./dist/extension.js",
 	"contributes": {
 		"commands": [
 			{
-				"command": "fsharp-fable-sample.helloWorld",
+				"command": "migrondi-vscode.helloWorld",
 				"title": "Hello World"
 			}
 		]

@@ -8,7 +8,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".paket", ".paket", "{F39ADA
 		paket.dependencies = paket.dependencies
 	EndProjectSection
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "fsharp-fable-sample", "src\fsharp-fable-sample.fsproj", "{A82931CA-2FEE-450B-91A3-4DF096CE26DA}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "migrondi-vscode", "src\migrondi-vscode.fsproj", "{A82931CA-2FEE-450B-91A3-4DF096CE26DA}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
