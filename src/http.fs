@@ -1,15 +1,15 @@
 module Migrondi.VSCode.Http
 
-open Fable.Import.Axios
 open Fable.Core
 open Fable.Core.JsInterop
 open Migrondi.VSCode.Types
 open Thoth.Json
 open Node.Api
 
-let private downloadFile (url: string, filepath: string) : JS.Promise<unit> = importMember "./interop"
+let private axios: Fable.Import.Axios.AxiosStatic = importDefault "axios"
 
-let private axios = Fable.Import.Globals.axios
+let private access (pathLike: string) : JS.Promise<unit> = importMember "fs/promises"
+let private downloadAndExtract (url: string, extractTo: string) : JS.Promise<unit> = importMember "./interop"
 
 let private decodeReleases data =
     match Decode.fromValue "" Release.Decoder data with
@@ -30,52 +30,55 @@ let private parseVersion (version: string) =
     let patch = parts.[2]
     (major |> int, minor |> int, patch |> int)
 
-let downloadfile (url: string) (fullPath: string) =
-    promise {
-        let config =
-            {| headers = {| accept = "application/octet-stream" |}
-               responseType = "stream" |}
-        // do an ugly hack to get the latest release
-        let! response = axios.get (url, box config :?> AxiosXHRConfigBase<obj>)
-        let stream = fs.createWriteStream fullPath
 
-        (response.data :?> Node.Stream.Readable<string>)
-            .pipe (stream)
-        |> ignore
+let private getLatestRelease () =
+    axios.get "https://api.github.com/repos/AngelMunoz/Migrondi/releases/latest"
+    |> Promise.map (fun result -> decodeReleases result.data)
 
-        return
-            Promise.create
-                (fun resolve reject ->
-                    stream
-                        .on(
-                            "error",
-                            fun err ->
-                                stream.close ()
-                                reject (err)
-                        )
-                        .on ("finish", resolve)
-                    |> ignore)
-    }
-
+let private getAssetWithName name (release: JS.Promise<Release option>) =
+    release
+    |> Promise.map (
+        Option.map
+            (fun release ->
+                release.assets
+                |> List.tryFind (fun asset -> asset.name = name)
+                |> Option.map (fun asset -> asset, release.tag_name))
+    )
 
 let downloadIfNotExists binaryName downloadPath =
     promise {
-        let! result = axios.get "https://api.github.com/repos/AngelMunoz/Migrondi/releases/latest"
+        let! asset =
+            getLatestRelease ()
+            |> getAssetWithName binaryName
+            |> Promise.map (Option.flatten)
 
-        match decodeReleases result.data with
-        | Some release ->
-            match release.assets
-                  |> List.tryFind (fun asset -> asset.name = binaryName) with
-            | Some asset ->
-                do!
-                    downloadFile (
-                        $"https://api.github.com/repos/AngelMunoz/Migrondi/releases/assets/{asset.id}",
-                        downloadPath
-                    )
+        match asset with
+        | Some (asset, version) ->
+            do!
+                downloadAndExtract (
+                    $"https://api.github.com/repos/AngelMunoz/Migrondi/releases/assets/{asset.id}",
+                    $"{downloadPath}/{version}"
+                )
 
-                ()
-            | None -> ()
-        | None -> ()
+            return Some version
+        | None ->
+            raise (exn "No asset found")
+            return None
     }
 
-let checkandUpdate () = ()
+let checkandUpdate binaryName downloadPath =
+    promise {
+        let! asset =
+            getLatestRelease ()
+            |> getAssetWithName binaryName
+            |> Promise.map (Option.flatten)
+
+        match asset with
+        | Some (asset, version) ->
+            try
+                do! access $"{downloadPath}/{version}"
+                return Some version
+            with
+            | _ -> return! downloadIfNotExists binaryName downloadPath
+        | None -> return None
+    }

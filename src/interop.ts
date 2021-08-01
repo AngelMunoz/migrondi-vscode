@@ -1,8 +1,9 @@
-import * as vscode from 'vscode';
-import { access, mkdir, } from 'fs/promises';
-import { createWriteStream } from 'fs';
 import axios from 'axios';
 
+import { access, mkdir, } from 'fs/promises';
+import { Extract } from 'unzipper';
+
+import * as vscode from 'vscode';
 
 export async function getOrCreatePath(context: vscode.ExtensionContext) {
     const path = context.globalStorageUri.fsPath;
@@ -17,20 +18,22 @@ export async function getOrCreatePath(context: vscode.ExtensionContext) {
 }
 
 
-export function downloadFile(url: string, name: string) {
-    return axios.request({
-        url,
+export async function downloadAndExtract(url: string, extractTo: string) {
+    console.time(`Migrondi: downloading ${url}`);
+    const res = await axios.get(url, {
         headers: { accept: 'application/octet-stream' },
         responseType: 'stream'
-    }).then(res => {
-        const stream = createWriteStream(name);
-        return new Promise((resolve, reject) => {
-            res.data.pipe(stream);
-            stream.on('error', (err) => {
-                stream.close();
-                reject(err);
+    });
+    return new Promise((resolve, reject) => {
+        res.data.pipe(Extract({ path: extractTo }))
+            .on('data', () => {
+                console.clear();
+                process.stdout.write("Migrondi in progress...");
+            })
+            .on('error', reject)
+            .on('close', () => {
+                console.timeEnd(`Migrondi: downloading ${url}`);
+                resolve(undefined);
             });
-            stream.on('finish', resolve);
-        });
-    }).catch(console.error);
+    });
 }
