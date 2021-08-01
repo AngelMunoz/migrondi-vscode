@@ -5,6 +5,10 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\paket-files\ionide\ionide-vscode-helpers\src\Fable.Import.Axios.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/Fable.Import.Axios.fs</Link>
+    </Compile>
     <Compile Include="..\paket-files\ionide\ionide-vscode-helpers\src\Fable.Import.VSCode.fs">
       <Paket>True</Paket>
       <Link>paket-files/Fable.Import.VSCode.fs</Link>
@@ -13,6 +17,8 @@
       <Paket>True</Paket>
       <Link>paket-files/Helpers.fs</Link>
     </Compile>
+    <Compile Include="types.fs" />
+    <Compile Include="http.fs" />
     <Compile Include="extension.fs" />
   </ItemGroup>
   <Import Project="..\.paket\Paket.Restore.targets" />
