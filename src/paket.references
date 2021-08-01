@@ -2,6 +2,8 @@ Fable.Core
 Fable.Promise
 Fable.Node
 Fable.Browser.Dom
+Thoth.Json
 
+File:Fable.Import.Axios.fs
 File:Fable.Import.VSCode.fs
 File:Helpers.fs
