@@ -9,17 +9,49 @@
 	"categories": [
 		"Other"
 	],
-	"activationEvents": [
-		"onCommand:migrondi-vscode.helloWorld"
-	],
 	"main": "./dist/extension.js",
+	"activationEvents": [
+		"onCommand:migrondi-vscode.init",
+		"workspaceContains:migrondi.json"
+	],
 	"contributes": {
 		"commands": [
 			{
-				"command": "migrondi-vscode.helloWorld",
-				"title": "Hello World"
+				"category": "Migrondi",
+				"command": "migrondi-vscode.init",
+				"title": "init"
+			},
+			{
+				"category": "Migrondi",
+				"title": "new",
+				"command": "migrondi-vscode.new"
+			},
+			{
+				"category": "Migrondi",
+				"title": "up",
+				"command": "migrondi-vscode.up"
+			},
+			{
+				"category": "Migrondi",
+				"title": "down",
+				"command": "migrondi-vscode.down"
+			},
+			{
+				"category": "Migrondi",
+				"title": "list",
+				"command": "migrondi-vscode.list"
 			}
-		]
+		],
+		"views": {
+			"explorer": [
+				{
+					"id": "migrondi-vscode.migration-list",
+					"name": "Migration List",
+					"visibility": "collapsed",
+					"type": "tree"
+				}
+			]
+		}
 	},
 	"scripts": {
 		"postinstall": "dotnet tool restore",
@@ -29,18 +61,22 @@
 		"package": "webpack --mode production --devtool hidden-source-map"
 	},
 	"devDependencies": {
-		"@types/vscode": "^1.58.0",
 		"@types/glob": "^7.1.3",
 		"@types/mocha": "^8.2.2",
 		"@types/node": "14.x",
-		"eslint": "^7.27.0",
+		"@types/vscode": "^1.58.0",
 		"@typescript-eslint/eslint-plugin": "^4.26.0",
 		"@typescript-eslint/parser": "^4.26.0",
+		"eslint": "^7.27.0",
 		"glob": "^7.1.7",
 		"mocha": "^8.4.0",
-		"typescript": "^4.3.2",
 		"ts-loader": "^9.2.2",
+		"typescript": "^4.3.2",
 		"webpack": "^5.38.1",
 		"webpack-cli": "^4.7.0"
+	},
+	"dependencies": {
+		"axios": "^0.21.1",
+		"unzipper": "~0.10.11"
 	}
 }
