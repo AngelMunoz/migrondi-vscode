@@ -40,7 +40,8 @@ let private updateMigrondiState state =
         migrondiState <- state
 
 let private migrondiCmds =
-    [ "migrondi-vscode.init", Commands.Init.Command ]
+    [ "migrondi-vscode.init", Commands.Init.Command
+      "migrondi-vscode.new", Commands.New.Command ]
 
 let private migrondiExists
     (downloadIfNotExists: unit -> JS.Promise<unit>)

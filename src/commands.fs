@@ -74,3 +74,65 @@ module Init =
                 | None -> ()
             }
             :> obj
+
+[<RequireQualifiedAccess>]
+module New =
+    open Helpers
+
+    let private newCb (error: ExecError option) (stdout: U2<string, Buffer>) (stderr: U2<string, Buffer>) =
+        promise {
+            match error with
+            | None ->
+
+                match stdout with
+                | U2.Case1 (stdout) ->
+                    let! _ = window.showInformationMessage stdout
+                    ()
+                | U2.Case2 (stdout) ->
+                    let! _ = window.showInformationMessage (stdout.toString (Utf8))
+                    ()
+
+                match stderr with
+                | U2.Case1 (stderr) ->
+                    let! _ = window.showInformationMessage stderr
+                    ()
+                | U2.Case2 (stderr) ->
+                    let! _ = window.showInformationMessage (stderr.toString (Utf8))
+                    ()
+            | Some error ->
+                let! _ = window.showErrorMessage $"{stderr}"
+                ()
+        }
+        |> ignore
+
+    let Command (context: ExtensionContext) =
+        fun (_: obj) ->
+            promise {
+                let ws =
+                    workspace.workspaceFolders |> Array.tryHead
+
+                match ws with
+                | Some ws ->
+                    let migrondiExe = execPath context
+
+                    let inputOpts =
+                        {| value = "SampleMigration"
+                           title = "New Migration"
+                           prompt = "The name of your migration"
+                           placeHolder = "create-users-table"
+                           ignoreFocusOut = true |}
+                        |> box
+                        :?> InputBoxOptions
+
+                    let! value =
+                        window.showInputBox (inputOpts)
+                        |> Promise.map (Option.ofObj >> Option.defaultValue "")
+
+                    let execOpts =
+                        {| cwd = ws.uri.fsPath |} |> box :?> Node.ChildProcess.ExecOptions
+
+                    childProcess.exec ($"{migrondiExe} new -n {value}", execOpts, newCb)
+                    |> ignore
+                | None -> ()
+            }
+            :> obj
