@@ -5,13 +5,13 @@ import { Extract } from 'unzipper';
 
 import * as vscode from 'vscode';
 
-export async function getOrCreatePath(context: vscode.ExtensionContext) {
+export async function getOrCreatePath(context: vscode.ExtensionContext, channel: vscode.OutputChannel) {
     const path = context.globalStorageUri.fsPath;
     try {
-        console.debug(`Migrondi: checking "${path}" exists`);
+        channel.appendLine(`Migrondi: checking "${path}" exists`);
         await access(path);
     } catch (error) {
-        console.debug(`Migrondi: "${path}" does not exist, creating`);
+        channel.appendLine(`Migrondi: "${path}" does not exist, creating`);
         await mkdir(path, { recursive: true });
     }
     return path;

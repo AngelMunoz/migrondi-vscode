@@ -9,7 +9,8 @@ open Node.Api
 open Migrondi.VSCode.Types
 open Migrondi.VSCode.Http
 
-let private getOrCreatePath (context: ExtensionContext) : JS.Promise<string> = importMember "./interop"
+let private getOrCreatePath (context: ExtensionContext, channel: OutputChannel) : JS.Promise<string> =
+    importMember "./interop"
 
 [<RequireQualifiedAccess>]
 type private MigrondiState =
@@ -41,9 +42,12 @@ let private updateMigrondiState state =
 
 let private migrondiCmds =
     [ "migrondi-vscode.init", Commands.Init.Command
-      "migrondi-vscode.new", Commands.New.Command ]
+      "migrondi-vscode.new", Commands.New.Command
+      "migrondi-vscode.up", Commands.Up.Command
+      "migrondi-vscode.down", Commands.Down.Command ]
 
 let private migrondiExists
+    (channel: OutputChannel)
     (downloadIfNotExists: unit -> JS.Promise<unit>)
     (checkandUpdate: unit -> JS.Promise<unit>)
     (err: Node.Base.ErrnoException option)
@@ -51,10 +55,10 @@ let private migrondiExists
     promise {
         match err with
         | Some err ->
-            printfn $"Migrondi: Migrondi binary not on path: {err.message}, will download"
+            channel.appendLine $"Migrondi: Migrondi binary not on path: {err.message}, will download"
             do! downloadIfNotExists ()
         | None ->
-            printfn "Migrondi: Migrondi is on path, checking for updates"
+            channel.appendLine "Migrondi: Migrondi is on path, checking for updates"
             do! checkandUpdate ()
     }
 
@@ -74,39 +78,45 @@ let private getMigrondiBinFileName platform arch =
 
     $"{platform}-{arch}.zip"
 
-let initializeMigrondi filename path setMigrondiVersion =
+let initializeMigrondi filename path setMigrondiVersion channel =
     Promise.create
         (fun resolve reject ->
             let downloadIfNotExists () =
                 promise {
-                    match! downloadIfNotExists filename path with
+                    match! downloadIfNotExists channel filename path with
                     | Some version -> setMigrondiVersion version
                     | None -> ()
                 }
 
             let checkAndUpdate () =
                 promise {
-                    match! checkandUpdate filename path with
+                    match! checkandUpdate channel filename path with
                     | Some version -> setMigrondiVersion version
                     | None -> ()
                 }
 
             let accessCallback err =
-                migrondiExists downloadIfNotExists checkAndUpdate err
+                migrondiExists channel downloadIfNotExists checkAndUpdate err
                 |> Promise.map resolve
                 |> Promise.catch reject
                 |> Promise.start
 
             fs.access (U2.Case1 path, accessCallback))
 
+let subscriptions = ResizeArray<Disposable>([])
+
 let activate (context: ExtensionContext) : JS.Promise<unit> =
     printfn "Activating Migrondi"
+    let appChannel = window.createOutputChannel ("Migrondi")
+
+    let diagnosticsChannel =
+        window.createOutputChannel ("Migrondi: Diagnostics")
 
     promise {
         let zipFilename =
             getMigrondiBinFileName (os.platform ()) (os.arch ())
 
-        let! basePath = getOrCreatePath context
+        let! basePath = getOrCreatePath (context, diagnosticsChannel)
 
         let setMigrondiVersion version =
             context.globalState.update ("migrondi-version", version)
@@ -114,24 +124,30 @@ let activate (context: ExtensionContext) : JS.Promise<unit> =
 
         try
             updateMigrondiState MigrondiState.Updating
-            do! initializeMigrondi zipFilename $"{basePath}/migrondi" setMigrondiVersion
+            do! initializeMigrondi zipFilename $"{basePath}/migrondi" setMigrondiVersion diagnosticsChannel
         with
         | err ->
-            eprintfn $"Migrondi: Error initializing migrondi: {err.Message}"
+            diagnosticsChannel.appendLine $"Migrondi: Error initializing migrondi: {err.Message}"
             updateMigrondiState MigrondiState.NotReady
             return ()
 
         do! context.globalState.update ("migrondi-path", $"{basePath}/migrondi")
         updateMigrondiState MigrondiState.Ready
+        diagnosticsChannel.appendLine "Activated Migrondi Successfully"
 
-        context.subscriptions.AddRange [ for (command, cb) in migrondiCmds do
-                                             commands.registerCommand (command, cb context) ]
+        subscriptions.AddRange [ for (command, cb) in migrondiCmds do
+                                     commands.registerCommand (command, cb context appChannel)
+                                 appChannel :?> Disposable
+                                 diagnosticsChannel :?> Disposable ]
     }
 
 
-let deactivate (disposables: Disposable []) =
+let deactivate () =
     printfn "Deactivating Migrondi"
     updateMigrondiState MigrondiState.NotReady
+    printfn "Disposing: %A" subscriptions
 
-    disposables
-    |> Array.iter (fun d -> d.dispose () |> ignore)
+    subscriptions
+    |> Seq.iter (fun d -> d.dispose () |> ignore)
+
+    subscriptions.Clear()

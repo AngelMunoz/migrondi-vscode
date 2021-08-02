@@ -5,17 +5,18 @@ open Fable.Core.JsInterop
 open Migrondi.VSCode.Types
 open Thoth.Json
 open Node.Api
+open Fable.Import.vscode
 
 let private axios: Fable.Import.Axios.AxiosStatic = importDefault "axios"
 
 let private access (pathLike: string) : JS.Promise<unit> = importMember "fs/promises"
 let private downloadAndExtract (url: string, extractTo: string) : JS.Promise<unit> = importMember "./interop"
 
-let private decodeReleases data =
+let private decodeReleases (channel: OutputChannel) data =
     match Decode.fromValue "" Release.Decoder data with
     | Ok result -> Some result
     | Error err ->
-        eprintfn $"{err}"
+        channel.appendLine $"{err}"
         None
 
 let private getLastRelease releases =
@@ -31,9 +32,9 @@ let private parseVersion (version: string) =
     (major |> int, minor |> int, patch |> int)
 
 
-let private getLatestRelease () =
+let private getLatestRelease channel =
     axios.get "https://api.github.com/repos/AngelMunoz/Migrondi/releases/latest"
-    |> Promise.map (fun result -> decodeReleases result.data)
+    |> Promise.map (fun result -> decodeReleases channel result.data)
 
 let private getAssetWithName name (release: JS.Promise<Release option>) =
     release
@@ -45,10 +46,10 @@ let private getAssetWithName name (release: JS.Promise<Release option>) =
                 |> Option.map (fun asset -> asset, release.tag_name))
     )
 
-let downloadIfNotExists binaryName downloadPath =
+let downloadIfNotExists channel binaryName downloadPath =
     promise {
         let! asset =
-            getLatestRelease ()
+            getLatestRelease channel
             |> getAssetWithName binaryName
             |> Promise.map (Option.flatten)
 
@@ -66,10 +67,10 @@ let downloadIfNotExists binaryName downloadPath =
             return None
     }
 
-let checkandUpdate binaryName downloadPath =
+let checkandUpdate channel binaryName downloadPath =
     promise {
         let! asset =
-            getLatestRelease ()
+            getLatestRelease channel
             |> getAssetWithName binaryName
             |> Promise.map (Option.flatten)
 
@@ -79,6 +80,6 @@ let checkandUpdate binaryName downloadPath =
                 do! access $"{downloadPath}/{version}"
                 return Some version
             with
-            | _ -> return! downloadIfNotExists binaryName downloadPath
+            | _ -> return! downloadIfNotExists channel binaryName downloadPath
         | None -> return None
     }
