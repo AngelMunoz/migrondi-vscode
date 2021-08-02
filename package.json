@@ -2,7 +2,15 @@
 	"name": "migrondi-vscode",
 	"displayName": "Migrondi",
 	"description": "Take Migrondi's SQL migration capabilities at dev",
-	"version": "0.0.1",
+	"publisher": "tunaxor-apps",
+	"version": "0.1.0",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/AngelMunoz/migrondi-vscode.git"
+	},
+	"extensionKind": [
+		"workspace"
+	],
 	"engines": {
 		"vscode": "^1.58.0"
 	},
