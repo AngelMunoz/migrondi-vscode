@@ -1,7 +1,7 @@
 {
 	"name": "migrondi-vscode",
-	"displayName": "migrondi-vscode",
-	"description": "",
+	"displayName": "Migrondi",
+	"description": "Take Migrondi's SQL migration capabilities at dev",
 	"version": "0.0.1",
 	"engines": {
 		"vscode": "^1.58.0"

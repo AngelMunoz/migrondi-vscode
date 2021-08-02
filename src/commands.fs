@@ -323,3 +323,84 @@ module Down =
             | None -> ()
         }
         :> obj
+
+[<RequireQualifiedAccess>]
+module List =
+    open Helpers
+
+    let private downCb
+        (channel: OutputChannel)
+        (error: ExecError option)
+        (stdout: U2<string, Buffer>)
+        (stderr: U2<string, Buffer>)
+        =
+        promise {
+            channel.show ()
+            channel.clear ()
+
+            match error with
+            | None ->
+                let stdout: string = stdout |> box |> unbox
+                let stderr: string = stderr |> box |> unbox
+
+                if not <| JsInterop.isNullOrUndefined stdout
+                   && stdout <> "" then
+                    let migration = stdout.Trim()
+
+                    channel.appendLine $"{migration}"
+
+                if not <| JsInterop.isNullOrUndefined stderr
+                   && stderr <> "" then
+                    channel.appendLine $"{stderr}"
+
+            | Some error -> channel.appendLine $"Migrondi Error: {error}"
+        }
+        |> ignore
+
+    let Command (context: ExtensionContext) (channel: OutputChannel) _ =
+        promise {
+            let ws =
+                workspace.workspaceFolders |> Array.tryHead
+
+            match ws with
+            | Some ws ->
+                let migrondiExe = execPath context
+
+                let! listType =
+                    let quickPickOpts =
+                        {| canPickMany = false
+                           ignoreFocusOut = true
+                           placeHolder = "pending or present"
+                           value = "pending"
+                           title = "List Migrations"
+                           prompt = "Which migrations to show?" |}
+                        |> box
+                        :?> QuickPickOptions
+
+                    window.showQuickPick (U2.Case1(ResizeArray([ "Pending"; "Present" ])), quickPickOpts)
+                    |> Promise.map (Option.ofObj >> Option.defaultValue "")
+
+                if listType.ToLowerInvariant() <> "pending"
+                   && listType.ToLowerInvariant() <> "present" then
+                    do!
+                        window.showErrorMessage
+                            $"""Invalid list type {listType}, allowed values are 'Pending' and 'Present'"""
+                        |> Promise.map ignore
+
+                    return ()
+
+                let execOpts =
+                    {| cwd = ws.uri.fsPath |} |> box :?> Node.ChildProcess.ExecOptions
+
+                let pending =
+                    if listType.ToLowerInvariant() = "pending" then
+                        "--missing true"
+                    else
+                        "-- missing false"
+
+                return
+                    childProcess.exec ($"{migrondiExe} list --all true {pending}", execOpts, downCb channel)
+                    |> ignore
+            | None -> return ()
+        }
+        :> obj

@@ -44,7 +44,8 @@ let private migrondiCmds =
     [ "migrondi-vscode.init", Commands.Init.Command
       "migrondi-vscode.new", Commands.New.Command
       "migrondi-vscode.up", Commands.Up.Command
-      "migrondi-vscode.down", Commands.Down.Command ]
+      "migrondi-vscode.down", Commands.Down.Command
+      "migrondi-vscode.list", Commands.List.Command ]
 
 let private migrondiExists
     (channel: OutputChannel)
