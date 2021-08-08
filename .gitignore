@@ -455,3 +455,6 @@ $RECYCLE.BIN/
 
 *.fs.js
 /dist
+
+*.vsix
+playground.js

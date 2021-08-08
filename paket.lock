@@ -34,6 +34,6 @@ NUGET
       FSharp.Core (>= 4.7.2) - restriction: >= netstandard2.0
 GITHUB
   remote: ionide/ionide-vscode-helpers
-    src/Fable.Import.Axios.fs (3c6cc652db8f2d58d54636595679149904f93c31)
-    src/Fable.Import.VSCode.fs (3c6cc652db8f2d58d54636595679149904f93c31)
-    src/Helpers.fs (3c6cc652db8f2d58d54636595679149904f93c31)
+    src/Fable.Import.Axios.fs (257c0efaf39c1f17eeccad5dd909feb7b3b4b43f)
+    src/Fable.Import.VSCode.fs (257c0efaf39c1f17eeccad5dd909feb7b3b4b43f)
+    src/Helpers.fs (257c0efaf39c1f17eeccad5dd909feb7b3b4b43f)
