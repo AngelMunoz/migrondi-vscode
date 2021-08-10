@@ -1,19 +1,21 @@
 namespace Migrondi.VSCode.Commands
 
-open Fable.Import.vscode
+open Fable.Import.VSCode.Vscode
 open Node.Api
 open Fable.Core
-open Node.Buffer
-open Node.ChildProcess
+open Migrondi.VSCode.Types
+open Fable.Core.JsInterop
 
 module private Helpers =
-    let execPath (context: ExtensionContext) =
+    let private execPath (context: ExtensionContext) =
+        let state = (context.globalState :?> Memento)
+
         let path =
-            context.globalState.get<string> ("migrondi-path")
+            state.get<string> ("migrondi-path")
             |> Option.defaultValue ""
 
         let version =
-            context.globalState.get<string> ("migrondi-version")
+            state.get<string> ("migrondi-version")
             |> Option.defaultValue ""
 
         let ext =
@@ -24,383 +26,257 @@ module private Helpers =
 
         $"{path}/{version}/Migrondi{ext}"
 
+    let private getCwd (workspaceFolders: (WorkspaceFolder ResizeArray) option) =
+        workspaceFolders
+        |> Option.map Seq.tryHead
+        |> Option.flatten
+        |> Option.map (fun ws -> ws.uri.fsPath)
+
+    let private getMigrondiExecFn
+        (execPath: ExtensionContext -> string)
+        (getCWD: (WorkspaceFolder ResizeArray) option -> string option)
+        : (ExtensionContext * string array) -> JS.Promise<MigrondiJsonOutput array> =
+        importMember "./interop"
+
+
+    let runMigrondi: (ExtensionContext * string array) -> JS.Promise<MigrondiJsonOutput array> =
+        getMigrondiExecFn execPath getCwd
+
+    let logErrorToChannel (channel: OutputChannel) err =
+        channel.show true
+        let err = err |> box |> unbox<string>
+        channel.appendLine (err)
+
+    let showMsgBoxHandler (output: MigrondiJsonOutput array) =
+        let rows =
+            output |> Array.map (fun o -> o.fullContent)
+
+        window.showInformationMessage (System.String.Join('\n', rows))
+        |> Promise.ofThenable
+
+    let logToChannel (channel: OutputChannel) (clearBeforeRun: bool) (output: MigrondiJsonOutput array) =
+        channel.show true
+        if clearBeforeRun then channel.clear ()
+
+        seq {
+            for row in output do
+                yield! row.fullContent.Split(os.EOL)
+        }
+        |> Seq.iter (channel.appendLine)
 
 
 [<RequireQualifiedAccess>]
 module Init =
     open Helpers
 
-    let private initCb (error: ExecError option) (stdout: U2<string, Buffer>) (stderr: U2<string, Buffer>) =
-        promise {
-            match error with
-            | None ->
-                let stdout: string = stdout |> box |> unbox
-                let stderr: string = stderr |> box |> unbox
-
-                if JsInterop.isNullOrUndefined stdout && stdout <> "" then
-                    do!
-                        window.showInformationMessage (stdout)
-                        |> Promise.map ignore
-
-                if JsInterop.isNullOrUndefined stderr && stderr <> "" then
-                    do!
-                        window.showErrorMessage (stderr)
-                        |> Promise.map ignore
-            | Some error ->
-                do!
-                    window.showErrorMessage $"Failed to run migrondi: {error.message}"
-                    |> Promise.map ignore
-        }
-        |> ignore
-
-    let Command (context: ExtensionContext) (channel: OutputChannel) =
-        fun (_: obj) ->
-            promise {
-                let ws =
-                    workspace.workspaceFolders |> Array.tryHead
-
-                match ws with
-                | Some ws ->
-                    let migrondiExe = execPath context
-
-                    let opts =
-                        {| cwd = ws.uri.fsPath |} |> box :?> Node.ChildProcess.ExecOptions
-
-                    childProcess.exec ($"{migrondiExe} init", opts, initCb)
-                    |> ignore
-                | None -> ()
-            }
-            :> obj
+    let Command (context: ExtensionContext) (channel: OutputChannel) _ : obj option =
+        runMigrondi (context, [| "--json"; "init" |])
+        |> Promise.map showMsgBoxHandler
+        |> Promise.catchEnd (logErrorToChannel channel)
+        |> box
+        |> Some
 
 [<RequireQualifiedAccess>]
 module New =
     open Helpers
 
-    let private newCb (error: ExecError option) (stdout: U2<string, Buffer>) (stderr: U2<string, Buffer>) =
+    let Command (context: ExtensionContext) (channel: OutputChannel) _ : obj option =
         promise {
-            match error with
-            | None ->
-                let stdout: string = stdout |> box |> unbox
-                let stderr: string = stderr |> box |> unbox
+            let inputOpts =
+                {| value = "SampleMigration"
+                   title = "New Migration"
+                   prompt = "The name of your migration"
+                   placeHolder = "create-users-table"
+                   ignoreFocusOut = true |}
+                |> box
+                :?> InputBoxOptions
 
-                if JsInterop.isNullOrUndefined stdout && stdout <> "" then
-                    do!
-                        window.showInformationMessage (stdout)
-                        |> Promise.map ignore
+            let! value =
+                window.showInputBox (inputOpts)
+                |> Promise.ofThenable
+                |> Promise.map (Option.defaultValue "")
 
-                if JsInterop.isNullOrUndefined stderr && stderr <> "" then
-                    do!
-                        window.showErrorMessage (stderr)
-                        |> Promise.map ignore
-            | Some error -> eprintf $"Migrondi Error: {error}"
+            return! runMigrondi (context, [| "--json"; "new"; "-n"; value |])
         }
-        |> ignore
-
-    let Command (context: ExtensionContext) (channel: OutputChannel) =
-        fun (_: obj) ->
-            promise {
-                let ws =
-                    workspace.workspaceFolders |> Array.tryHead
-
-                match ws with
-                | Some ws ->
-                    let migrondiExe = execPath context
-
-                    let inputOpts =
-                        {| value = "SampleMigration"
-                           title = "New Migration"
-                           prompt = "The name of your migration"
-                           placeHolder = "create-users-table"
-                           ignoreFocusOut = true |}
-                        |> box
-                        :?> InputBoxOptions
-
-                    let! value =
-                        window.showInputBox (inputOpts)
-                        |> Promise.map (Option.ofObj >> Option.defaultValue "")
-
-                    let execOpts =
-                        {| cwd = ws.uri.fsPath |} |> box :?> Node.ChildProcess.ExecOptions
-
-                    childProcess.exec ($"{migrondiExe} new -n {value}", execOpts, newCb)
-                    |> ignore
-                | None -> ()
-            }
-            :> obj
+        |> Promise.map showMsgBoxHandler
+        |> Promise.catchEnd (logErrorToChannel channel)
+        |> box
+        |> Some
 
 [<RequireQualifiedAccess>]
 module Up =
     open Helpers
 
-    let private upCb
-        (channel: OutputChannel)
-        (error: ExecError option)
-        (stdout: U2<string, Buffer>)
-        (stderr: U2<string, Buffer>)
-        =
+    let Command (context: ExtensionContext) (channel: OutputChannel) _ : obj option =
         promise {
-            channel.show ()
-            channel.clear ()
 
-            match error with
-            | None ->
-                let stdout: string = stdout |> box |> unbox
-                let stderr: string = stderr |> box |> unbox
+            let inputOpts =
+                {| value = "1"
+                   title = "Run Migrations Up"
+                   prompt = "Amount of migrations to run, leave -1 to run all"
+                   placeHolder = "1 (-1 to run all pending)"
+                   ignoreFocusOut = true |}
+                |> box
+                :?> InputBoxOptions
 
-                if not <| JsInterop.isNullOrUndefined stdout
-                   && stdout <> "" then
-                    let migration =
-                        stdout.Trim().Split(path.sep) |> Seq.last
+            let! value =
+                window.showInputBox (inputOpts)
+                |> Promise.ofThenable
+                |> Promise.map (Option.defaultValue "")
 
-                    channel.appendLine $"{migration}"
-
-                if not <| JsInterop.isNullOrUndefined stderr
-                   && stderr <> "" then
-                    channel.appendLine $"{stderr}"
-
-            | Some error ->
-                eprintf $"Migrondi Error: {error}"
-                channel.appendLine $"Migrondi Error: {error}"
-        }
-        |> ignore
-
-    let Command (context: ExtensionContext) (channel: OutputChannel) _ =
-        promise {
-            let ws =
-                workspace.workspaceFolders |> Array.tryHead
-
-            match ws with
-            | Some ws ->
-                let migrondiExe = execPath context
-
-                let inputOpts =
-                    {| value = "1"
-                       title = "Run Migrations Up"
-                       prompt = "Amount of migrations to run, leave -1 to run all"
-                       placeHolder = "1 (-1 to run all pending)"
-                       ignoreFocusOut = true |}
+            let! isDry =
+                let quickPickOpts =
+                    {| canPickMany = false
+                       ignoreFocusOut = true
+                       placeHolder = "Yes"
+                       title = "Is this a dry run?" |}
                     |> box
-                    :?> InputBoxOptions
+                    :?> QuickPickOptions
 
-                let! value =
-                    window.showInputBox (inputOpts)
-                    |> Promise.map (Option.ofObj >> Option.defaultValue "")
+                window.showQuickPick (U2.Case1(ResizeArray([ "Yes"; "No" ])), quickPickOpts)
+                |> Promise.ofThenable
+                |> Promise.map (Option.defaultValue "Yes")
 
-                let! isDry =
-                    let quickPickOpts =
-                        {| canPickMany = false
-                           ignoreFocusOut = true
-                           placeHolder = "Yes"
-                           title = "Is this a dry run?" |}
-                        |> box
-                        :?> QuickPickOptions
+            let amount =
+                try
+                    value |> int
+                with
+                | _ ->
+                    channel.appendLine $"Failed to parse {value} defaulting to 0"
+                    0
 
-                    window.showQuickPick (U2.Case1(ResizeArray([ "Yes"; "No" ])), quickPickOpts)
-                    |> Promise.map (Option.ofObj >> Option.defaultValue "")
+            let total = if amount > 0 then $"{amount}" else "0"
 
-                let amount =
-                    try
-                        value |> int
-                    with
-                    | _ ->
-                        channel.appendLine $"Failed to parse {value} defaulting to 0"
-                        0
+            let dryRun =
+                if isDry.ToLowerInvariant() = "yes" then
+                    "true"
+                else
+                    "false"
 
-                let execOpts =
-                    {| cwd = ws.uri.fsPath |} |> box :?> Node.ChildProcess.ExecOptions
-
-                let total =
-                    if amount < 0 then
-                        ""
-                    else
-                        $"-t {amount}"
-
-                let dryRun =
-                    if isDry.ToLowerInvariant() = "yes" then
-                        "-d true"
-                    else
-                        ""
-
-                childProcess.exec ($"{migrondiExe} up {total} {dryRun}", execOpts, upCb channel)
-                |> ignore
-            | None -> ()
+            return!
+                runMigrondi (
+                    context,
+                    [| "--json"
+                       "up"
+                       "--dry-run"
+                       dryRun
+                       "--total"
+                       total |]
+                )
         }
-        :> obj
+        |> Promise.map (logToChannel channel true)
+        |> Promise.catchEnd (logErrorToChannel channel)
+        |> box
+        |> Some
 
 [<RequireQualifiedAccess>]
 module Down =
     open Helpers
 
-    let private downCb
-        (channel: OutputChannel)
-        (error: ExecError option)
-        (stdout: U2<string, Buffer>)
-        (stderr: U2<string, Buffer>)
-        =
+    let Command (context: ExtensionContext) (channel: OutputChannel) _ : obj option =
         promise {
-            channel.show ()
-            channel.clear ()
 
-            match error with
-            | None ->
-                let stdout: string = stdout |> box |> unbox
-                let stderr: string = stderr |> box |> unbox
+            let inputOpts =
+                {| value = "1"
+                   title = "Run Migrations Down"
+                   prompt = "Amount of migrations to run, leave -1 to run all"
+                   placeHolder = "1 (-1 to run all pending)"
+                   ignoreFocusOut = true |}
+                |> box
+                :?> InputBoxOptions
 
-                if not <| JsInterop.isNullOrUndefined stdout
-                   && stdout <> "" then
-                    let migration =
-                        stdout.Trim().Split(path.sep) |> Seq.last
+            let! value =
+                window.showInputBox (inputOpts)
+                |> Promise.ofThenable
+                |> Promise.map (Option.defaultValue "")
 
-                    channel.appendLine $"{migration}"
-
-                if not <| JsInterop.isNullOrUndefined stderr
-                   && stderr <> "" then
-                    channel.appendLine $"{stderr}"
-
-            | Some error -> channel.appendLine $"Migrondi Error: {error}"
-        }
-        |> ignore
-
-    let Command (context: ExtensionContext) (channel: OutputChannel) _ =
-        promise {
-            let ws =
-                workspace.workspaceFolders |> Array.tryHead
-
-            match ws with
-            | Some ws ->
-                let migrondiExe = execPath context
-
-                let inputOpts =
-                    {| value = "1"
-                       title = "Run Migrations Up"
-                       prompt = "Amount of migrations to run, leave -1 to run all"
-                       placeHolder = "1 (-1 to run all pending)"
-                       ignoreFocusOut = true |}
+            let! isDry =
+                let quickPickOpts =
+                    {| canPickMany = false
+                       ignoreFocusOut = true
+                       placeHolder = "Yes"
+                       title = "Is this a dry run?" |}
                     |> box
-                    :?> InputBoxOptions
+                    :?> QuickPickOptions
 
-                let! value =
-                    window.showInputBox (inputOpts)
-                    |> Promise.map (Option.ofObj >> Option.defaultValue "")
+                window.showQuickPick (U2.Case1(ResizeArray([ "Yes"; "No" ])), quickPickOpts)
+                |> Promise.ofThenable
+                |> Promise.map (Option.defaultValue "Yes")
 
-                let! isDry =
-                    let quickPickOpts =
-                        {| canPickMany = false
-                           ignoreFocusOut = true
-                           placeHolder = "Yes"
-                           title = "Is this a dry run?" |}
-                        |> box
-                        :?> QuickPickOptions
+            let amount =
+                try
+                    value |> int
+                with
+                | _ ->
+                    channel.appendLine $"Failed to parse {value} defaulting to 0"
+                    0
 
-                    window.showQuickPick (U2.Case1(ResizeArray([ "Yes"; "No" ])), quickPickOpts)
-                    |> Promise.map (Option.ofObj >> Option.defaultValue "")
+            let total = if amount > 0 then $"{amount}" else "0"
 
-                let amount =
-                    try
-                        value |> int
-                    with
-                    | _ ->
-                        channel.appendLine $"Failed to parse {value} defaulting to 0"
-                        0
+            let dryRun =
+                if isDry.ToLowerInvariant() = "yes" then
+                    "true"
+                else
+                    "false"
 
-                let execOpts =
-                    {| cwd = ws.uri.fsPath |} |> box :?> Node.ChildProcess.ExecOptions
-
-                let total =
-                    if amount < 0 then
-                        ""
-                    else
-                        $"-t {amount}"
-
-                let dryRun =
-                    if isDry.ToLowerInvariant() = "yes" then
-                        "-d true"
-                    else
-                        ""
-
-                childProcess.exec ($"{migrondiExe} down {total} {dryRun}", execOpts, downCb channel)
-                |> ignore
-            | None -> ()
+            return!
+                runMigrondi (
+                    context,
+                    [| "--json"
+                       "down"
+                       "--dry-run"
+                       dryRun
+                       "--total"
+                       total |]
+                )
         }
-        :> obj
+        |> Promise.map (logToChannel channel true)
+        |> Promise.catchEnd (logErrorToChannel channel)
+        |> box
+        |> Some
 
 [<RequireQualifiedAccess>]
 module List =
     open Helpers
 
-    let private downCb
-        (channel: OutputChannel)
-        (error: ExecError option)
-        (stdout: U2<string, Buffer>)
-        (stderr: U2<string, Buffer>)
-        =
+    let Command (context: ExtensionContext) (channel: OutputChannel) _ : obj option =
         promise {
-            channel.show ()
-            channel.clear ()
+            let! listType =
+                let quickPickOpts =
+                    {| canPickMany = false
+                       ignoreFocusOut = true
+                       placeHolder = "pending or present"
+                       value = "pending"
+                       title = "List Migrations"
+                       prompt = "Which migrations to show?" |}
+                    |> box
+                    :?> QuickPickOptions
 
-            match error with
-            | None ->
-                let stdout: string = stdout |> box |> unbox
-                let stderr: string = stderr |> box |> unbox
+                window.showQuickPick (U2.Case1(ResizeArray([ "Pending"; "Present"; "Both" ])), quickPickOpts)
+                |> Promise.ofThenable
+                |> Promise.map (Option.defaultValue "")
 
-                if not <| JsInterop.isNullOrUndefined stdout
-                   && stdout <> "" then
-                    let migration = stdout.Trim()
+            let kind = listType.ToLowerInvariant()
 
-                    channel.appendLine $"{migration}"
+            if kind <> "pending"
+               && kind <> "present"
+               && kind <> "both" then
+                do!
+                    window.showErrorMessage
+                        $"""Invalid list type "{kind}", allowed values are 'Pending', 'Present', or 'Both'"""
+                    |> Promise.ofThenable
+                    |> Promise.map ignore
 
-                if not <| JsInterop.isNullOrUndefined stderr
-                   && stderr <> "" then
-                    channel.appendLine $"{stderr}"
+                let msg: MigrondiJsonOutput array =
+                    [| { fullContent =
+                             $"""Invalid list type "{kind}", allowed values are 'Pending', 'Present', or 'Both'"""
+                         parts = [] } |]
 
-            | Some error -> channel.appendLine $"Migrondi Error: {error}"
+                return msg
+            else
+                return! runMigrondi (context, [| "--json"; "list"; "--kind"; kind |])
         }
-        |> ignore
-
-    let Command (context: ExtensionContext) (channel: OutputChannel) _ =
-        promise {
-            let ws =
-                workspace.workspaceFolders |> Array.tryHead
-
-            match ws with
-            | Some ws ->
-                let migrondiExe = execPath context
-
-                let! listType =
-                    let quickPickOpts =
-                        {| canPickMany = false
-                           ignoreFocusOut = true
-                           placeHolder = "pending or present"
-                           value = "pending"
-                           title = "List Migrations"
-                           prompt = "Which migrations to show?" |}
-                        |> box
-                        :?> QuickPickOptions
-
-                    window.showQuickPick (U2.Case1(ResizeArray([ "Pending"; "Present" ])), quickPickOpts)
-                    |> Promise.map (Option.ofObj >> Option.defaultValue "")
-
-                if listType.ToLowerInvariant() <> "pending"
-                   && listType.ToLowerInvariant() <> "present" then
-                    do!
-                        window.showErrorMessage
-                            $"""Invalid list type {listType}, allowed values are 'Pending' and 'Present'"""
-                        |> Promise.map ignore
-
-                    return ()
-
-                let execOpts =
-                    {| cwd = ws.uri.fsPath |} |> box :?> Node.ChildProcess.ExecOptions
-
-                let pending =
-                    if listType.ToLowerInvariant() = "pending" then
-                        "--missing true"
-                    else
-                        "-- missing false"
-
-                return
-                    childProcess.exec ($"{migrondiExe} list --all true {pending}", execOpts, downCb channel)
-                    |> ignore
-            | None -> return ()
-        }
-        :> obj
+        |> Promise.map (logToChannel channel true)
+        |> Promise.catchEnd (logErrorToChannel channel)
+        |> box
+        |> Some
