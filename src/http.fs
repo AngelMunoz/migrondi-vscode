@@ -5,14 +5,14 @@ open Fable.Core.JsInterop
 open Migrondi.VSCode.Types
 open Thoth.Json
 open Node.Api
-open Fable.Import.vscode
+open Fable.Import.VSCode
 
 let private axios: Fable.Import.Axios.AxiosStatic = importDefault "axios"
 
 let private access (pathLike: string) : JS.Promise<unit> = importMember "fs/promises"
 let private downloadAndExtract (url: string, extractTo: string) : JS.Promise<unit> = importMember "./interop"
 
-let private decodeReleases (channel: OutputChannel) data =
+let private decodeReleases (channel: Vscode.OutputChannel) data =
     match Decode.fromValue "" Release.Decoder data with
     | Ok result -> Some result
     | Error err ->

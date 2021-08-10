@@ -3,7 +3,7 @@
 open Fable.Core
 open Fable.Core.JsInterop
 
-open Fable.Import.vscode
+open Fable.Import.VSCode.Vscode
 open Node.Api
 
 open Migrondi.VSCode.Types
@@ -114,13 +114,15 @@ let activate (context: ExtensionContext) : JS.Promise<unit> =
         window.createOutputChannel ("Migrondi: Diagnostics")
 
     promise {
+        let state = (context.globalState :?> Memento)
+
         let zipFilename =
             getMigrondiBinFileName (os.platform ()) (os.arch ())
 
         let! basePath = getOrCreatePath (context, diagnosticsChannel)
 
-        let setMigrondiVersion version =
-            context.globalState.update ("migrondi-version", version)
+        let setMigrondiVersion (version: string) =
+            state.update ("migrondi-version", version |> box |> Some)
             |> ignore
 
         try
@@ -132,7 +134,7 @@ let activate (context: ExtensionContext) : JS.Promise<unit> =
             updateMigrondiState MigrondiState.NotReady
             return ()
 
-        do! context.globalState.update ("migrondi-path", $"{basePath}/migrondi")
+        do! state.update ("migrondi-path", $"{basePath}/migrondi" |> box |> Some)
         updateMigrondiState MigrondiState.Ready
         diagnosticsChannel.appendLine "Activated Migrondi Successfully"
 
