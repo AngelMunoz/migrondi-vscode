@@ -43,3 +43,55 @@ type Release =
                   draft = o.Required.Field "draft" Decode.bool
                   prerelease = o.Required.Field "prerelease" Decode.bool
                   assets = o.Required.Field "assets" (Decode.list Asset.Decoder) })
+
+
+type ConsoleOutput =
+    | Normal of string
+    | Warning of string
+    | Danger of string
+    | Success of string
+
+    static member Decoder =
+        Decode.object
+            (fun o ->
+                let case = o.Required.Field "Case" Decode.string
+
+                let fields =
+                    o.Required.Field "Fields" (Decode.list Decode.string)
+
+                match case with
+                | "Normal" -> Normal fields.Head
+                | "Warning" -> Warning fields.Head
+                | "Danger" -> Danger fields.Head
+                | "Success" -> Success fields.Head
+                | _ -> failwith "Unknown case")
+
+type MigrondiJsonOutput =
+    { fullContent: string
+      parts: ConsoleOutput list }
+
+    static member Decoder =
+        Decode.object
+            (fun o ->
+                { fullContent = o.Required.Field "fullContent" Decode.string
+                  parts = o.Required.Field "parts" (Decode.list ConsoleOutput.Decoder) })
+
+
+[<AutoOpen>]
+module Utils =
+    open Fable.Core
+    open Fable.Import.VSCode
+
+    type Foo = JS.PromiseConstructor
+
+    type Promise.PromiseBuilder with
+        member x.Source(p: Thenable<'t>) : JS.Promise<'t> = box p |> unbox
+        member x.Source(p: JS.Promise<'t>) : JS.Promise<'t> = p
+
+module Promise =
+
+    open Fable.Core
+    open Fable.Import.VSCode
+
+    let ofThenable (t: Thenable<'t>) : JS.Promise<'t> = unbox (box t)
+    let toThenable (p: JS.Promise<'t>) : Thenable<'t> = unbox (box p)
